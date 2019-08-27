@@ -1,0 +1,1 @@
+python myWikiIndexer.py $1 $2

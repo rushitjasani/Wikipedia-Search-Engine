@@ -1,0 +1,291 @@
+import sys
+import timeit
+import re
+import spacy
+from xml.sax import parse
+from xml.sax import ContentHandler
+from collections import defaultdict
+# from stemming.porter import stem
+from nltk.stem import PorterStemmer
+
+
+ps = PorterStemmer()
+
+if len(sys.argv) != 3:
+	print("Arguments invalid")
+	print("Run using : ./index.sh <path-to-dump> <path-to-index-file> ")
+	sys.exit(1)
+
+documentTitleMapping = open("docToTitle.txt","w")
+
+'''
+Dictionary structure
+{
+    word : {
+        docID :{
+            t1 : cnt1,
+            t2 : cnt2
+        }
+        docId : {
+            t1 : cnt3,
+            t2 : cnt4
+        }
+        .
+        .
+        .
+    }
+    .
+    .
+    .
+}
+'''
+invertedIndex = defaultdict(lambda:defaultdict(lambda:defaultdict(int)))
+
+stopwordsList = set()
+with open("stopwords.txt",'r') as f:
+    for line in f:
+        line = line.strip()
+        stopwordsList.add(line)
+
+# Regular Expression to remove Brackets and other meta characters from title
+regExp1 = re.compile(r"[~`!@#$%-^*+{\[}\]\|\\<>/?]",re.DOTALL)
+# Regular Expression for Categories
+catRegExp = r'\[\[category:(.*?)\]\]'
+# Regular Expression for Infobox
+infoRegExp = r'{{infobox(.*?)}}'
+# Regular Expression for References
+referenesRegExp = r'== ?references ?==(.*?)=='
+# Regular Expression to remove Infobox
+regExp2 = re.compile(infoRegExp,re.DOTALL)
+# Regular Expression to remove references
+regExp3 = re.compile(referenesRegExp,re.DOTALL)
+# Regular Expression to remove {{.*}} from text
+regExp4 = re.compile(r'{{(.*?)}}',re.DOTALL)
+# Regular Expression to remove junk from text
+regExp5 = re.compile(r"[~`!@#$%-^*+{\[}\]\|\\<>/?]",re.DOTALL)
+
+def cleanText(text):
+    # Regular Expression to remove URLs
+    # reg = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+',re.DOTALL)
+    # text = reg.sub('',text)
+    # Regular Expression to remove CSS
+    reg = re.compile(r'{\|(.*?)\|}',re.DOTALL)
+    text = reg.sub('',text)
+    # Regular Expression to remove {{cite **}} or {{vcite **}}
+    reg = re.compile(r'{{v?cite(.*?)}}',re.DOTALL)  
+    text = reg.sub('',text)
+    # Regular Expression to remove Punctuation
+    reg = re.compile(r'[.,;_()"/\']',re.DOTALL)
+    text = reg.sub(' ',text)
+    # Regular Expression to remove [[file:]]
+    reg = re.compile(r'\[\[file:(.*?)\]\]',re.DOTALL)
+    text = reg.sub('',text)
+    # Regular Expression to remove <..> tags from text
+    reg = re.compile(r'<(.*?)>',re.DOTALL)
+    text = reg.sub('',text)
+    # Regular Expression to remove non ASCII char
+    # reg = re.compile(r'[^\x00-\x7F]+',re.DOTALL)
+    # text = reg.sub(' ', text)
+    return text
+
+def addToIndex(wordList,docID,t):
+    for word in wordList:
+        word = word.strip()
+        reg = re.compile(r'[^\x00-\x7F]+',re.DOTALL)
+        word = reg.sub(' ', word)
+        if word.isalpha() and len(word)>3 and word not in stopwordsList:
+            word = ps.stem(word)
+            if word not in stopwordsList:
+                if word in invertedIndex:
+                    if docID in invertedIndex[word]:
+                    	if t in invertedIndex[word][docID]:
+                    		invertedIndex[word][docID][t] += 1
+                    	else:
+                    		invertedIndex[word][docID][t] = 1
+                    else:
+                    	invertedIndex[word][docID] = {t:1}
+                else:
+                	invertedIndex[word] = dict({docID:{t:1}})
+
+def processBuffer(text,docID,isTitle):
+    text = text.lower()
+    text = cleanText(text)
+    if isTitle == True:
+        words = text.split()
+        tokens = list()
+        for word in words:
+            if word.isalpha() and word not in stopwordsList:
+                tokens.append(regExp1.sub(' ',word))
+
+        # words = [regExp1.sub(' ',word) for word in words if word.isalpha() and word not in stopwordsList]
+        # addToIndex(words,docID,"t")
+        addToIndex(tokens,docID,"t")
+    else:
+        infobox = list()
+        categories = list()
+        external = list()
+        references = list()
+
+        externalLinkIndex = 0
+        # referencesIndex = 0
+        categoryIndex = len(text)
+        
+        categories = re.findall(catRegExp,text,flags=re.MULTILINE)
+        # infobox = re.findall(infoRegExp,text,re.DOTALL)
+
+        # infoboxStartIndex = text.index('{{infobox')+10
+        lines = text.split('\n')
+        flag = 1
+        for i in range(len(lines)):
+            if '{{infobox' in lines[i]:
+                flag=0
+                temp=lines[i].split('{{infobox')[1:]
+                infobox.extend(temp)
+                while True:
+                    if(i >= len(lines)): 
+                        break
+                    if '{{' in lines[i]:
+                        count=lines[i].count('{{')
+                        flag+=count
+                    if '}}' in lines[i]:
+                        count=lines[i].count('}}')
+                        flag-=count
+                    if flag<=0:
+                        break
+                    i+=1
+                    if(i<len(lines)):
+                        infobox.append(lines[i])
+            if flag <= 0 :
+                text = '\n'.join(lines[ i+1: ])
+                break
+
+        # print(text)
+        # text = regExp2.sub('',text)
+
+        try:
+            externalLinkIndex = text.index('==external links==')+20
+        except:
+            pass
+        
+        if externalLinkIndex == 0:
+            try:
+                externalLinkIndex = text.index('== external links ==')+22
+            except:
+                pass
+
+        try:
+            categoryIndex = text.index('[[category:')
+        except:
+            pass
+        
+        if externalLinkIndex != 0:
+            external = text[externalLinkIndex:categoryIndex]
+            external = re.findall(r'\[(.*?)\]',external,flags=re.MULTILINE)
+        
+        references = re.findall(referenesRegExp,text,flags=re.DOTALL)
+        
+        if externalLinkIndex!=0:
+            text = text[0:externalLinkIndex-20]
+        
+        text = regExp3.sub('',text)
+        text = regExp4.sub('',text)
+        text = regExp5.sub(' ',text)
+        words = text.split()
+        # print("WORDS :: ")
+        # print(words)
+        addToIndex(words,docID,"b")
+        
+        categories = ' '.join(categories)
+        categories = regExp5.sub(' ',categories)
+        categories = categories.split()
+        # print("CAT :: ")
+        # print(categories)
+        addToIndex(categories,docID,"c")
+        
+        external = ' '.join(external)
+        external = regExp5.sub(' ',external)
+        external = external.split()
+        # print("EXT :: ")
+        # print(external)
+        addToIndex(external,docID,"e")
+        
+        references = ' '.join(references)
+        references = regExp5.sub(' ',references)
+        references = references.split()
+        # print("REF :: ")
+        # print(references)
+        addToIndex(references,docID,"r")
+        
+        for infoList in infobox:
+            tokenList = list()
+            # tokenList = re.findall(r'=(.*?)\|',infoList,re.DOTALL)
+            tokenList = re.findall(r'\d+|[\w]+',infoList,re.DOTALL)
+            tokenList = ' '.join(tokenList)
+            tokenList = regExp5.sub(' ',tokenList)
+            tokenList = tokenList.split()
+            # print("INFO :: ")
+            # print(tokenList)
+            addToIndex(tokenList,docID,"i")
+
+class WikiContentHandler(ContentHandler):
+    def __init__(self):
+        self.docID = 0
+        self.isTitle = False
+        self.flag = False
+        self.title = ""
+        self.buffer = ""
+    
+    def characters(self,content):
+        self.buffer = self.buffer + content
+    
+    def startElement(self,element,attributes):
+        if element == "title":
+            self.buffer = ""
+            self.isTitle = True
+            self.flag = True
+        if element == "page":
+            self.docID += 1
+        if element == "text":
+            self.buffer = ""
+       	if element == "id" and self.flag:
+       		self.buffer = ""
+    
+    def endElement(self,element):
+        if element == "title":
+            processBuffer(self.buffer,self.docID,self.isTitle)
+            self.isTitle = False
+            self.title = self.buffer
+            self.buffer = ""
+        elif element == "text":
+            processBuffer(self.buffer,self.docID,self.isTitle)
+            self.buffer = ""
+        elif element == "id" and self.flag==True:
+        	try:
+        		documentTitleMapping.write(str(self.docID)+"#"+self.title+":"+self.buffer+"\n")
+        	except:
+        		documentTitleMapping.write(str(self.docID)+"#"+self.title.encode('utf-8')+":"+self.buffer.encode('utf-8')+"\n")
+        	self.flag = False
+        	self.buffer = ""
+
+def main():
+    print("Parsing data")
+    dumpFile = sys.argv[1]
+    parse(dumpFile,WikiContentHandler())
+    indexfile = sys.argv[2]
+    f = open(indexfile,"w")
+    for key,val in sorted(invertedIndex.items()):
+        s =str(key)+"="
+        for k,v in sorted(val.items()):
+            s += str(k) + ":"
+            for k1,v1 in v.items():
+                s = s + str(k1) + str(v1) + "#"
+            s = s[:-1]+","
+        f.write(s[:-1]+"\n")
+    f.close()
+    invertedIndex.clear()
+
+if __name__ == "__main__":
+    start = timeit.default_timer()
+    main()
+    stop = timeit.default_timer()
+    print(stop - start)

@@ -23,10 +23,11 @@ def write_file(outputs, path_to_output):
                 file.write(line.strip() + '\n')
             file.write('\n')
 
+
 docToTitle = dict()
 noDocs = 0
 try:
-    f = open("docToTitle.txt","r")
+    f = open("docToTitle.txt", "r")
     for line in f:
         docID, titleMap = line.split("#")
         docToTitle[docID] = titleMap
@@ -37,14 +38,15 @@ except:
 
 stopWords = set()
 try:
-    f = open("stopwords.txt","r")
+    f = open("stopwords.txt", "r")
     for line in f:
         stopWords.add(line.strip())
 except:
     print("Can't find stopwords.txt")
     sys.exit(1)
 
-invertedIndex = defaultdict(lambda:defaultdict(lambda:defaultdict(int)))
+invertedIndex = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+
 
 def readIndex(path_to_index):
     try:
@@ -60,36 +62,59 @@ def readIndex(path_to_index):
     except:
         pass
 
+
 def cleanText(text):
     # Regular Expression to remove URLs
-    reg = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+',re.DOTALL)
-    text = reg.sub('',text)
+    reg = re.compile(
+        r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', re.DOTALL)
+    text = reg.sub('', text)
     # Regular Expression to remove CSS
-    reg = re.compile(r'{\|(.*?)\|}',re.DOTALL)
-    text = reg.sub('',text)
+    reg = re.compile(r'{\|(.*?)\|}', re.DOTALL)
+    text = reg.sub('', text)
     # Regular Expression to remove {{cite **}} or {{vcite **}}
-    reg = re.compile(r'{{v?cite(.*?)}}',re.DOTALL)  
-    text = reg.sub('',text)
+    reg = re.compile(r'{{v?cite(.*?)}}', re.DOTALL)
+    text = reg.sub('', text)
     # Regular Expression to remove Punctuation
-    reg = re.compile(r'[.,;_()"/\']',re.DOTALL)
-    text = reg.sub(' ',text)
+    reg = re.compile(r'[.,;_()"/\']', re.DOTALL)
+    text = reg.sub(' ', text)
     # Regular Expression to remove [[file:]]
-    reg = re.compile(r'\[\[file:(.*?)\]\]',re.DOTALL)
-    text = reg.sub('',text)
+    reg = re.compile(r'\[\[file:(.*?)\]\]', re.DOTALL)
+    text = reg.sub('', text)
     # Regular Expression to remove <..> tags from text
-    reg = re.compile(r'<(.*?)>',re.DOTALL)
-    text = reg.sub('',text)
+    reg = re.compile(r'<(.*?)>', re.DOTALL)
+    text = reg.sub('', text)
     # Regular Expression to remove non ASCII char
-    reg = re.compile(r'[^\x00-\x7F]+',re.DOTALL)
+    reg = re.compile(r'[^\x00-\x7F]+', re.DOTALL)
     text = reg.sub(' ', text)
     return text
 
+
+def parseQuery(queryText, isFieldQuery):
+    if isFieldQuery:
+        return []
+    else:
+        queryText = cleanText(queryText)
+        tokenList = re.findall(r'\d+|[\w]+', queryText, re.DOTALL)
+        finalTokens = list()
+        for tok in tokenList:
+            val = ps.stem(tok)
+            if len(val) > 0:
+                finalTokens.append(val)
+        print(finalTokens)
+        return []
+
+
 def search(path_to_index, queries):
-    '''Write your code here'''
     readIndex(path_to_index)
     finalResult = list()
+    fields = ['title:', 'body:', 'infobox:', 'category:', 'ref:']
     for query in queries:
-        print(query)
+        isFieldQuery = False
+        for f in fields:
+            if f in query:
+                isFieldQuery = True
+        result = parseQuery(query, isFieldQuery)
+        finalResult.append(result)
     return finalResult
 
 

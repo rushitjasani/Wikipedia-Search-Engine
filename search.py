@@ -27,7 +27,7 @@ def write_file(outputs, path_to_output):
 docToTitle = dict()
 noDocs = 0
 try:
-    f = open("docToTitle.txt", "r")
+    f = open(sys.argv[1] + "/docToTitle.txt", "r")
     for line in f:
         docID, titleMap = line.split("#")
         docToTitle[docID] = titleMap
@@ -50,7 +50,7 @@ invertedIndex = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 
 def readIndex(path_to_index):
     try:
-        f = open(path_to_index, "r")
+        f = open(path_to_index + "/invertedIndex.txt", "r")
         for line in f:
             word, postingList = line.split("=")
             postingList = postingList.split(",")
@@ -89,19 +89,80 @@ def cleanText(text):
     return text
 
 
+fieldDict = {"title": "t", "body": "b", "infobox": "i",
+             "category": "c", "ref": "r", "ext": "e"}
+
+
 def parseQuery(queryText, isFieldQuery):
+    searchResultTitle = list()
     if isFieldQuery:
-        return []
+        fieldQList = list()
+        queryList = queryText.split()
+        for word in queryList:
+            if ":" not in word:
+                word = "body:" + word
+            cat, content = word.split(":")
+            content = cleanText(content)
+            content = ps.stem(content)
+            if len(content) > 0 and content not in stopWords:
+                fieldQList.append((content, fieldDict[cat]))
+
+        # searchResultDict = dict(set())
+        # searchResult = set()
+        # for tok, ctype in fieldQList:
+        #     searchResultDict[tok] = set(i for i in invertedIndex[tok].keys() if invertedIndex[tok][i][ctype]>0)
+        #     if len(searchResult) == 0:
+        #         searchResult = searchResultDict[tok]
+        #     else:
+        #         searchResult = searchResult.intersection(searchResultDict[tok])
+
+        #     print(tok , searchResultDict[tok])
+
+        # for docId in searchResult:
+        #     searchResultTitle.append(docToTitle[docId])
+        searchResult = defaultdict(int)
+        for tok, ctype in fieldQList:
+            for docID, freqDict in invertedIndex[tok].items():
+                searchResult[docID] += freqDict[ctype]
+
+        searchResult = sorted(searchResult.items(),
+                              key=lambda item: item[1], reverse=True)[0:10]
+
+        for tup in searchResult:
+            docId, freq = tup
+            searchResultTitle.append(docToTitle[docId])
+
     else:
         queryText = cleanText(queryText)
         tokenList = re.findall(r'\d+|[\w]+', queryText, re.DOTALL)
         finalTokens = list()
         for tok in tokenList:
             val = ps.stem(tok)
-            if len(val) > 0:
+            if len(val) > 0 and val not in stopWords:
                 finalTokens.append(val)
-        print(finalTokens)
-        return []
+        searchResultTitle = list()
+        # searchResultDict = dict(set())
+        # searchResult = set()
+        # for tok in finalTokens:
+        #     searchResultDict[tok] = set(invertedIndex[tok].keys())
+        #     if len(searchResult) == 0:
+        #         searchResult = searchResultDict[tok]
+        #     else:
+        #         searchResult = searchResult.union(searchResultDict[tok])
+
+        searchResult = defaultdict(int)
+        for tok in finalTokens:
+            for docID, freqDict in invertedIndex[tok].items():
+                freq = sum(freqDict.values())
+                searchResult[docID] += freq
+
+        searchResult = sorted(searchResult.items(),
+                              key=lambda item: item[1], reverse=True)[0:10]
+
+        for tup in searchResult:
+            docId, freq = tup
+            searchResultTitle.append(docToTitle[docId])
+    return searchResultTitle
 
 
 def search(path_to_index, queries):

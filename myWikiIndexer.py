@@ -13,10 +13,10 @@ ps = PorterStemmer()
 
 if len(sys.argv) != 3:
 	print("Arguments invalid")
-	print("Run using : ./index.sh <path-to-dump> <path-to-index-file> ")
+	print("Run using : bash index.sh <path_to_dump> <path_to_index_folder>")
 	sys.exit(1)
 
-documentTitleMapping = open("docToTitle.txt","w")
+documentTitleMapping = open(sys.argv[2] + "/docToTitle.txt","w")
 
 '''
 Dictionary structure
@@ -93,7 +93,7 @@ def addToIndex(wordList,docID,t):
         word = word.strip()
         reg = re.compile(r'[^\x00-\x7F]+',re.DOTALL)
         word = reg.sub(' ', word)
-        if word.isalpha() and len(word)>3 and word not in stopwordsList:
+        if word.isalpha() and len(word)>=3 and word not in stopwordsList:
             word = ps.stem(word)
             if word not in stopwordsList:
                 if word in invertedIndex:
@@ -188,7 +188,7 @@ def processBuffer(text,docID,isTitle):
             text = text[0:externalLinkIndex-20]
         
         text = regExp3.sub('',text)
-        text = regExp4.sub('',text)
+        # text = regExp4.sub('',text)
         text = regExp5.sub(' ',text)
         words = text.split()
         # print("WORDS :: ")
@@ -261,9 +261,9 @@ class WikiContentHandler(ContentHandler):
             self.buffer = ""
         elif element == "id" and self.flag==True:
         	try:
-        		documentTitleMapping.write(str(self.docID)+"#"+self.title+":"+self.buffer+"\n")
+        		documentTitleMapping.write(str(self.docID)+"#"+self.title+"\n")
         	except:
-        		documentTitleMapping.write(str(self.docID)+"#"+self.title.encode('utf-8')+":"+self.buffer.encode('utf-8')+"\n")
+        		documentTitleMapping.write(str(self.docID)+"#"+self.title.encode('utf-8')+"\n")
         	self.flag = False
         	self.buffer = ""
 
@@ -271,8 +271,8 @@ def main():
     print("Parsing data")
     dumpFile = sys.argv[1]
     parse(dumpFile,WikiContentHandler())
-    indexfile = sys.argv[2]
-    f = open(indexfile,"w")
+    path_to_index = sys.argv[2]
+    f = open(path_to_index + "/invertedIndex.txt","w")
     for key,val in sorted(invertedIndex.items()):
         s =str(key)+"="
         for k,v in sorted(val.items()):

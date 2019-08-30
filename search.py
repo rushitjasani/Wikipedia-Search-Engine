@@ -1,7 +1,6 @@
 import sys
 import re
 from collections import defaultdict
-# from stemming.porter import stem
 from nltk.stem import PorterStemmer
 
 ps = PorterStemmer()
@@ -64,13 +63,6 @@ def readIndex(path_to_index):
 
 
 def cleanText(text):
-    # Regular Expression to remove URLs
-    reg = re.compile(
-        r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', re.DOTALL)
-    text = reg.sub('', text)
-    # Regular Expression to remove CSS
-    reg = re.compile(r'{\|(.*?)\|}', re.DOTALL)
-    text = reg.sub('', text)
     # Regular Expression to remove {{cite **}} or {{vcite **}}
     reg = re.compile(r'{{v?cite(.*?)}}', re.DOTALL)
     text = reg.sub('', text)
@@ -104,22 +96,9 @@ def parseQuery(queryText, isFieldQuery):
             cat, content = word.split(":")
             content = cleanText(content)
             content = ps.stem(content)
-            if len(content) > 0 and content not in stopWords:
+            if len(content) > 0 and content.isalnum and content not in stopWords:
                 fieldQList.append((content, fieldDict[cat]))
 
-        # searchResultDict = dict(set())
-        # searchResult = set()
-        # for tok, ctype in fieldQList:
-        #     searchResultDict[tok] = set(i for i in invertedIndex[tok].keys() if invertedIndex[tok][i][ctype]>0)
-        #     if len(searchResult) == 0:
-        #         searchResult = searchResultDict[tok]
-        #     else:
-        #         searchResult = searchResult.intersection(searchResultDict[tok])
-
-        #     print(tok , searchResultDict[tok])
-
-        # for docId in searchResult:
-        #     searchResultTitle.append(docToTitle[docId])
         searchResult = defaultdict(int)
         for tok, ctype in fieldQList:
             for docID, freqDict in invertedIndex[tok].items():
@@ -138,17 +117,9 @@ def parseQuery(queryText, isFieldQuery):
         finalTokens = list()
         for tok in tokenList:
             val = ps.stem(tok)
-            if len(val) > 0 and val not in stopWords:
+            if len(val) > 0 and val.isalnum and val not in stopWords:
                 finalTokens.append(val)
         searchResultTitle = list()
-        # searchResultDict = dict(set())
-        # searchResult = set()
-        # for tok in finalTokens:
-        #     searchResultDict[tok] = set(invertedIndex[tok].keys())
-        #     if len(searchResult) == 0:
-        #         searchResult = searchResultDict[tok]
-        #     else:
-        #         searchResult = searchResult.union(searchResultDict[tok])
 
         searchResult = defaultdict(int)
         for tok in finalTokens:

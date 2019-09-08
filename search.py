@@ -161,4 +161,6 @@ def main():
 
 
 if __name__ == '__main__':
+    # todo : 
+    # take care of this word = re.sub(r'[.\-:&\ ]',"",word)
     main()

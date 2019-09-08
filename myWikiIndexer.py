@@ -11,6 +11,9 @@ from nltk.stem import PorterStemmer
 
 ps = PorterStemmer()
 stemmingMap = dict()
+fileLim = 5000
+dumpFile = sys.argv[1]
+path_to_index = sys.argv[2]
 
 if len(sys.argv) != 3:
     print("Arguments invalid")
@@ -86,6 +89,7 @@ def cleanText(text):
 def addToIndex(wordList, docID, t):
     for word in wordList:
         word = word.strip()
+        word = re.sub(r'[.\-:&\ ]',"",word)
         if len(word) >= 3 and word not in stopwordsList:
             if word not in stemmingMap.keys():
                 stemmingMap[word] = ps.stem(word)
@@ -104,6 +108,7 @@ def addToIndex(wordList, docID, t):
 
 
 def processBuffer(text, docID, isTitle):
+    global path_to_index
     text = text.lower()
     text = cleanText(text)
     if isTitle == True:
@@ -204,6 +209,19 @@ def processBuffer(text, docID, isTitle):
             tokenList = tokenList.split()
             addToIndex(tokenList, docID, "i")
 
+        if docID%fileLim == 0:
+            f = open(path_to_index + "/" + str(docID) + ".txt", "w")
+            for key, val in sorted(invertedIndex.items()):
+                s = str(key)+"="
+                for k, v in sorted(val.items()):
+                    s += str(k) + ":"
+                    for k1, v1 in v.items():
+                        s = s + str(k1) + str(v1) + "#"
+                    s = s[:-1]+","
+                f.write(s[:-1]+"\n")
+            f.close()
+            invertedIndex.clear()
+
 
 class WikiContentHandler(ContentHandler):
     def __init__(self):
@@ -248,25 +266,10 @@ class WikiContentHandler(ContentHandler):
 
 
 def main():
-    print("Parsing data")
-    dumpFile = sys.argv[1]
     parse(dumpFile, WikiContentHandler())
-    path_to_index = sys.argv[2]
-    f = open(path_to_index + "/invertedIndex.txt", "w")
-    for key, val in sorted(invertedIndex.items()):
-        s = str(key)+"="
-        for k, v in sorted(val.items()):
-            s += str(k) + ":"
-            for k1, v1 in v.items():
-                s = s + str(k1) + str(v1) + "#"
-            s = s[:-1]+","
-        f.write(s[:-1]+"\n")
-    f.close()
-    invertedIndex.clear()
 
 
 if __name__ == "__main__":
-    
     start = timeit.default_timer()
     main()
     stop = timeit.default_timer()

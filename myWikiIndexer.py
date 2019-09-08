@@ -1,3 +1,4 @@
+# startting phase 2
 import sys
 import timeit
 import re
@@ -265,6 +266,7 @@ def main():
 
 
 if __name__ == "__main__":
+    
     start = timeit.default_timer()
     main()
     stop = timeit.default_timer()

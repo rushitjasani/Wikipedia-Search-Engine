@@ -11,7 +11,7 @@ from nltk.stem import PorterStemmer
 
 ps = PorterStemmer()
 stemmingMap = dict()
-fileLim = 5000
+fileLim = 25000
 dumpFile = sys.argv[1]
 path_to_index = sys.argv[2]
 
@@ -90,7 +90,7 @@ def addToIndex(wordList, docID, t):
     for word in wordList:
         word = word.strip()
         word = re.sub(r'[.\-:&\ ]',"",word)
-        if len(word) >= 3 and word not in stopwordsList:
+        if len(word) >= 3 and len(word) <= 200 and word not in stopwordsList:
             if word not in stemmingMap.keys():
                 stemmingMap[word] = ps.stem(word)
             word = stemmingMap[word]
@@ -221,6 +221,7 @@ def processBuffer(text, docID, isTitle):
                 f.write(s[:-1]+"\n")
             f.close()
             invertedIndex.clear()
+            stemmingMap.clear()
 
 
 class WikiContentHandler(ContentHandler):
@@ -267,6 +268,18 @@ class WikiContentHandler(ContentHandler):
 
 def main():
     parse(dumpFile, WikiContentHandler())
+    f = open(path_to_index + "/19567269.txt", "w")
+    for key, val in sorted(invertedIndex.items()):
+        s = str(key)+"="
+        for k, v in sorted(val.items()):
+            s += str(k) + ":"
+            for k1, v1 in v.items():
+                s = s + str(k1) + str(v1) + "#"
+            s = s[:-1]+","
+        f.write(s[:-1]+"\n")
+    f.close()
+    invertedIndex.clear()
+    stemmingMap.clear()
 
 
 if __name__ == "__main__":

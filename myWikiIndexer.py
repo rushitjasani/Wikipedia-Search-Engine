@@ -20,7 +20,7 @@ if len(sys.argv) != 3:
     print("Run using : bash index.sh <path_to_dump> <path_to_index_folder>")
     sys.exit(1)
 
-documentTitleMapping = open(sys.argv[2] + "/docToTitle.txt", "w")
+documentTitleMapping = open("./docToTitle.txt", "w")
 
 '''
 Dictionary structure
@@ -52,7 +52,7 @@ with open("stopwords.txt", 'r') as f:
         stopwordsList.add(line)
 
 # Regular Expression to remove Brackets and other meta characters from title
-regExp1 = re.compile(r"[~`!@#$%-^*+{\[}\]\|\\<>/? ]", re.DOTALL)
+regExp1 = re.compile(r"[~`!@#$%\-^*+{\[}\]\|\\<>/?,]", re.DOTALL)
 # Regular Expression for Categories
 catRegExp = r'\[\[category:(.*?)\]\]'
 # Regular Expression for Infobox
@@ -64,7 +64,7 @@ regExp2 = re.compile(infoRegExp, re.DOTALL)
 # Regular Expression to remove references
 regExp3 = re.compile(referenesRegExp, re.DOTALL)
 # Regular Expression to remove junk from text
-regExp4 = re.compile(r"[~`!@#$%-^*+{\[}\]\|\\<>/?]", re.DOTALL)
+regExp4 = re.compile(r"[~`!@#$%\-^*+{\[}\]\|\\<>/?,]", re.DOTALL)
 
 
 def cleanText(text):
@@ -72,7 +72,7 @@ def cleanText(text):
     reg = re.compile(r'{{v?cite(.*?)}}', re.DOTALL)
     text = reg.sub('', text)
     # Regular Expression to remove Punctuation
-    reg = re.compile(r'[.,;_()"/\']', re.DOTALL)
+    reg = re.compile(r'[.,;_()/\"\'\=]', re.DOTALL)
     text = reg.sub(' ', text)
     # Regular Expression to remove [[file:]]
     reg = re.compile(r'\[\[file:(.*?)\]\]', re.DOTALL)
@@ -89,8 +89,8 @@ def cleanText(text):
 def addToIndex(wordList, docID, t):
     for word in wordList:
         word = word.strip()
-        word = re.sub(r'[.\-:&\ ]',"",word)
-        if len(word) >= 3 and len(word) <= 200 and word not in stopwordsList:
+        word = re.sub(r'[\ \.\-\:\&\$\!\*\+\%\,\@]+',"",word)
+        if len(word) >= 3 and len(word) <= 500 and word not in stopwordsList:
             if word not in stemmingMap.keys():
                 stemmingMap[word] = ps.stem(word)
             word = stemmingMap[word]

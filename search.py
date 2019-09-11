@@ -1,65 +1,54 @@
 import sys
 import re
+import timeit
 from collections import defaultdict
+from operator import itemgetter
 from nltk.stem import PorterStemmer
+from bisect import bisect
+from math import log10
 
 ps = PorterStemmer()
-
-
-def read_file(testfile):
-    with open(testfile, 'r') as file:
-        queries = file.readlines()
-    return queries
-
-
-def write_file(outputs, path_to_output):
-    '''outputs should be a list of lists.
-        len(outputs) = number of queries
-        Each element in outputs should be a list of titles corresponding to a particular query.'''
-    with open(path_to_output, 'w') as file:
-        for output in outputs:
-            for line in output:
-                file.write(line.strip() + '\n')
-            file.write('\n')
-
-
-docToTitle = dict()
 noDocs = 0
-try:
-    f = open(sys.argv[1] + "/docToTitle.txt", "r")
-    for line in f:
-        docID, titleMap = line.split("#")
-        docToTitle[docID] = titleMap
-        noDocs += 1
-except:
-    print("Can't find docToTitle.txt")
-    sys.exit(1)
-
+docToTitle = dict()
 stopWords = set()
-try:
-    f = open("stopwords.txt", "r")
-    for line in f:
-        stopWords.add(line.strip())
-except:
-    print("Can't find stopwords.txt")
-    sys.exit(1)
-
+secondaryIndex = list()
 invertedIndex = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+fieldDict = {"title": "t", "body": "b", "infobox": "i",
+             "category": "c", "ref": "r", "ext": "e"}
+fields = ['title:', 'body:', 'infobox:', 'category:', 'ref:']
+
+# prevtime = timeit.default_timer()
 
 
-def readIndex(path_to_index):
-    try:
-        f = open(path_to_index + "/invertedIndex.txt", "r")
+def readDocTitleMap():
+    global docToTitle, noDocs
+    with open("./docToTitle.txt", "r") as f:
         for line in f:
-            word, postingList = line.split("=")
-            postingList = postingList.split(",")
-            for pl in postingList:
-                docID, freqDict = pl.split(":")
-                freqDict = freqDict.split("#")
-                for freq in freqDict:
-                    invertedIndex[word][docID][freq[0]] = int(freq[1:])
+            docID, titleMap = line.split("#")
+            docToTitle[docID] = titleMap
+            noDocs += 1
+
+
+def readStopwords():
+    global stopWords
+    try:
+        f = open("stopwords.txt", "r")
+        for line in f:
+            stopWords.add(line.strip())
     except:
-        pass
+        print("Can't find stopwords.txt")
+        sys.exit(1)
+
+
+def readSecondaryIndex():
+    global secondaryIndex
+    try:
+        f = open("finalIndex/secondaryIndex.txt", "r")
+        for line in f:
+            secondaryIndex.append(line.split()[0])
+    except:
+        print("Can't find the secondary index file in 'finalIndex' Folder.")
+        sys.exit(1)
 
 
 def cleanText(text):
@@ -81,8 +70,31 @@ def cleanText(text):
     return text
 
 
-fieldDict = {"title": "t", "body": "b", "infobox": "i",
-             "category": "c", "ref": "r", "ext": "e"}
+def getFileNumber(word):
+    position = bisect(secondaryIndex, word)
+    isFirstLine = False
+    if position-1 >= 0 and secondaryIndex[position-1] == word:
+        isFirstLine = True
+        if position-1 != 0:
+            position -= 1
+        if position+1 == len(secondaryIndex) and secondaryIndex[position] == word:
+            position += 1
+    return position, isFirstLine
+
+
+def getPostingList(word):
+    position, isFirstLine = getFileNumber(word)
+    primaryFile = "finalIndex/index" + str(position) + ".txt"
+    file = open(primaryFile, "r")
+    data = file.read()
+    if isFirstLine:
+        startIndex = data.find(word+"=")
+    else:
+        startIndex = data.find("\n"+word+"=")
+    endIndex = data.find("\n", startIndex+1)
+    reqLine = data[startIndex:endIndex]
+    postingList = reqLine.split("=")[1].split(",")
+    return postingList
 
 
 def parseQuery(queryText, isFieldQuery):
@@ -110,57 +122,100 @@ def parseQuery(queryText, isFieldQuery):
         for tup in searchResult:
             docId, freq = tup
             searchResultTitle.append(docToTitle[docId])
-
     else:
+        wordRegEx = re.compile(r'[\ \.\-\:\&\$\!\*\+\%\,\@]+', re.DOTALL)
         queryText = cleanText(queryText)
-        tokenList = re.findall(r'\d+|[\w]+', queryText, re.DOTALL)
+        tokenList = queryText.split(" ")
+        tokenList = [wordRegEx.sub('', i) for i in tokenList]
         finalTokens = list()
         for tok in tokenList:
             val = ps.stem(tok)
             if len(val) > 0 and val.isalnum and val not in stopWords:
                 finalTokens.append(val)
-        searchResultTitle = list()
+        globalSearch = dict(list())
+        # print(timeit.default_timer() - prevtime)
+        for word in finalTokens:
+            postingList = getPostingList(word)
+            # print(timeit.default_timer() - prevtime)
+            numDoc = len(postingList)
+            idf = log10(noDocs/numDoc)
+            for i in postingList:
+                docID, entry = i.split(":")
+                if docID in globalSearch:
+                    globalSearch[docID].append(entry+"_"+str(idf))
+                else:
+                    globalSearch[docID] = [entry+"_"+str(idf)]
 
-        searchResult = defaultdict(int)
-        for tok in finalTokens:
-            for docID, freqDict in invertedIndex[tok].items():
-                freq = sum(freqDict.values())
-                searchResult[docID] += freq
+        lengthFreq = dict(dict())
+        regEx = re.compile(r'(\d+|\s+)')
+        for k in globalSearch:
+            weightedFreq = 0
+            n = len(globalSearch[k])
+            for x in globalSearch[k]:
+                x, idf = x.split("_")
+                x = x.split("#")
+                for y in x:
+                    lis = regEx.split(y)
+                    tagType, freq = lis[0], lis[1]
+                    if tagType == "t":
+                        weightedFreq += int(freq)*500
+                    elif tagType == "i" or tagType == "c" or tagType == "r" or tagType == "e":
+                        weightedFreq += int(freq)*50
+                    elif tagType == "b":
+                        weightedFreq += int(freq)
+            if n in lengthFreq:
+                lengthFreq[n][k] = float(log10(1+weightedFreq))*float(idf)
+            else:
+                lengthFreq[n] = {k: float(log10(1+weightedFreq))*float(idf)}
+        
+        # print("PROCESS", timeit.default_timer() - prevtime)
 
-        searchResult = sorted(searchResult.items(),
-                              key=lambda item: item[1], reverse=True)[0:10]
+        count = 0
+        flag = False
+        K = 10
+        for k, v in sorted(lengthFreq.items(), reverse=True):
+            for k1, _ in sorted(v.items(), key=itemgetter(1), reverse=True):
+                print(docToTitle[k1], end='')
+                count += 1
+                if count == K:
+                    flag = True
+                    break
+            if flag:
+                break
+        # print("SORT AND PRINT",timeit.default_timer() - prevtime)
 
-        for tup in searchResult:
-            docId, freq = tup
-            searchResultTitle.append(docToTitle[docId])
-    return searchResultTitle
 
-
-def search(path_to_index, queries):
-    readIndex(path_to_index)
-    finalResult = list()
-    fields = ['title:', 'body:', 'infobox:', 'category:', 'ref:']
-    for query in queries:
-        isFieldQuery = False
-        for f in fields:
-            if f in query:
-                isFieldQuery = True
-        result = parseQuery(query, isFieldQuery)
-        finalResult.append(result)
-    return finalResult
+def search(path_to_index, query):
+    global fields
+    isFieldQuery = False
+    for f in fields:
+        if f in query:
+            isFieldQuery = True
+            break
+    parseQuery(query, isFieldQuery)
 
 
 def main():
-    path_to_index = sys.argv[1]
-    testfile = sys.argv[2]
-    path_to_output = sys.argv[3]
-
-    queries = read_file(testfile)
-    outputs = search(path_to_index, queries)
-    write_file(outputs, path_to_output)
+    path_to_index = "./finalIndex/"
+    while True:
+        query = input("\nEnter Query: ")
+        print("+++++++++++++++++++++++++++++++++++")
+        start = timeit.default_timer()
+        search(path_to_index, query)
+        end = timeit.default_timer()
+        print("\nTook", end-start, "sec\n")
+        print("+++++++++++++++++++++++++++++++++++")
 
 
 if __name__ == '__main__':
-    # todo : 
-    # take care of this word = re.sub(r'[.\-:&\ ]',"",word)
-    main()
+    print("reading DoctitleMap")
+    readDocTitleMap()
+    # print(timeit.default_timer() - prevtime)
+    print("reading secondary Index")
+    readSecondaryIndex()
+    # print(timeit.default_timer() - prevtime)
+    readStopwords()
+    try:
+        main()
+    except:
+        print("\n\nThank You..\n")

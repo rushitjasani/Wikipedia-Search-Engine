@@ -10,7 +10,7 @@ splittedIndexFolder = "./index"
 mergedIndexFolder = "./finalIndex"
 
 numberOfMergedIndexfile = 0
-chunkSize = 100000
+chunkSize = 5000
 secondaryIndex = defaultdict()
 invertedIndex = defaultdict()
 splittedFilePathList = glob(splittedIndexFolder + "/*")
@@ -29,7 +29,7 @@ def writeSecondaryIndex():
     fileName = mergedIndexFolder + "/secondaryIndex.txt"
     with open(fileName, "w") as fp:
         for i in sorted(secondaryIndex):
-            fp.write(str(i) + " " + str(secondaryIndex[i]) + "\n")
+            fp.write(str(i) + "\n")
 
 
 def writePrimaryIndex():

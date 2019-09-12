@@ -25,6 +25,14 @@ fieldDict = {
     'ref': 'r',
     'ext': 'e',
     }
+weight = {
+    't': 500,
+    'b': 1,
+    'i': 50,
+    'c': 50,
+    'r': 50,
+    'e': 50,
+}
 fields = ['title:', 'body:', 'infobox:', 'category:', 'ref:']
 
 
@@ -131,18 +139,10 @@ def getPostingList(word):
 
 
 def printResult(lengthFreq):
-    count = 0
-    flag = False
-    K = 10
-    for (_, v) in sorted(lengthFreq.items(), reverse=True):
-        for (k1, _) in sorted(v.items(), key=itemgetter(1), reverse=True):
-            print("=> ", docToTitle[k1], end='')
-            count += 1
-            if count == K:
-                flag = True
-                break
-        if flag:
-            break
+    lengthFreq = sorted(lengthFreq.items(), key=lambda item: item[1], reverse=True)[0:10]
+    for tup in lengthFreq:
+        (docId, _) = tup
+        print("=> ", docToTitle[docId], end='')
 
 
 def parseQuery(queryText, isFieldQuery):
@@ -160,8 +160,7 @@ def parseQuery(queryText, isFieldQuery):
             if len(content) > 0 and content.isalnum and content \
                 not in stopWords:
                 fieldQList.append((content, fieldDict[cat]))
-        globalSearch = dict(list())
-
+        finalDict = defaultdict(int)
         for (word, category) in fieldQList:
             postingListAll = getPostingList(word)
             postingList = [i for i in postingListAll if category in i]
@@ -169,12 +168,15 @@ def parseQuery(queryText, isFieldQuery):
                 postingList = postingListAll
             numDoc = len(postingList)
             idf = log10(noDocs / numDoc)
-            for i in postingList:
-                (docID, entry) = i.split(':')
-                if docID in globalSearch:
-                    globalSearch[docID].append(entry + '_' + str(idf))
-                else:
-                    globalSearch[docID] = [entry + '_' + str(idf)]
+            for pl in postingList:
+                docId, freqList = pl.split(":")
+                categoryFreq = freqList.split("#")
+                tf = 0
+                for cf in categoryFreq:
+                    cat = cf[0]
+                    freq = int(cf[1:])
+                    tf += (freq * weight[cat])
+                finalDict[docId] += float(log10(1 + tf)) * float(idf)
     else:
 
         queryText = cleanText(queryText)
@@ -185,44 +187,21 @@ def parseQuery(queryText, isFieldQuery):
             val = ps.stem(tok)
             if len(val) > 0 and val.isalnum and val not in stopWords:
                 finalTokens.append(val)
-        globalSearch = dict(list())
+        finalDict = defaultdict(int)
         for word in finalTokens:
             postingList = getPostingList(word)
             numDoc = len(postingList)
             idf = log10(noDocs / numDoc)
-            for i in postingList:
-                (docID, entry) = i.split(':')
-                if docID in globalSearch:
-                    globalSearch[docID].append(entry + '_' + str(idf))
-                else:
-                    globalSearch[docID] = [entry + '_' + str(idf)]
-
-    lengthFreq = dict(dict())
-    regEx = re.compile(r'(\d+|\s+)')
-    for k in globalSearch:
-        weightedFreq = 0
-        n = len(globalSearch[k])
-        for x in globalSearch[k]:
-            (x, idf) = x.split('_')
-            x = x.split('#')
-            for y in x:
-                lis = regEx.split(y)
-                (tagType, freq) = (lis[0], lis[1])
-                if tagType == 't':
-                    weightedFreq += int(freq) * 500
-                elif tagType == 'i' or tagType == 'c' or tagType == 'r' \
-                    or tagType == 'e':
-                    weightedFreq += int(freq) * 50
-                elif tagType == 'b':
-                    weightedFreq += int(freq)
-        if n in lengthFreq:
-            lengthFreq[n][k] = float(log10(1 + weightedFreq)) \
-                * float(idf)
-        else:
-            lengthFreq[n] = {k: float(log10(1 + weightedFreq)) \
-                             * float(idf)}
-
-    printResult(lengthFreq)
+            for pl in postingList:
+                docId, freqList = pl.split(":")
+                categoryFreq = freqList.split("#")
+                tf = 0
+                for cf in categoryFreq:
+                    cat = cf[0]
+                    freq = int(cf[1:])
+                    tf += (freq * weight[cat])
+                finalDict[docId] += float(log10(1 + tf)) * float(idf)
+    printResult(finalDict)
 
 
 def search(path_to_index, query):

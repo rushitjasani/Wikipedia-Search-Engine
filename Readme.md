@@ -6,8 +6,8 @@ This is a search engine built on the full English corpus of wikipedia (~75GB)
 
 ### For Queries of
 
-1. less than **3** words, time to fetch results is **< 1s**
-2. between **3 and 7** words, time to fetch results is **Around 5s**
+1. Less than **3** words, time to fetch results is **< 1s**
+2. Between **3 and 7** words, time to fetch results is **Around 5s**
 
 ## Code Files
 
